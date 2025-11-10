@@ -250,13 +250,91 @@
             padding: 40px;
             color: #999;
         }
+
+        /* Authentication Styles */
+        #authView {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+
+        #authView .section {
+            text-align: center;
+        }
+
+        #authView h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .auth-toggle {
+            margin-top: 15px;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .auth-toggle:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .logout-container {
+            text-align: right;
+            margin-bottom: 20px;
+        }
+
+        .logout-container span {
+            color: #666;
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Project Management Platform</h1>
+        <!-- Authentication View -->
+        <div id="authView">
+            <div class="section">
+                <h2 id="authTitle">Login</h2>
+                <div id="authError" class="error-message"></div>
+                <form id="authForm">
+                    <div class="form-group">
+                        <label for="authUsername">Username</label>
+                        <input type="text" id="authUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="authPassword">Password</label>
+                        <input type="password" id="authPassword" required>
+                    </div>
+                    <button type="submit" id="authSubmitBtn">Login</button>
+                </form>
+                <div class="auth-toggle" onclick="toggleAuthMode()">
+                    <span id="authToggleText">Don't have an account? Sign up</span>
+                </div>
+            </div>
+        </div>
 
-        <!-- Projects View -->
+        <!-- Main Application -->
+        <div id="mainApp" class="hidden">
+            <div class="logout-container">
+                <span id="currentUser"></span>
+                <button class="secondary" onclick="logout()">Logout</button>
+            </div>
+            <h1>Project Management Platform</h1>
+
+            <!-- Projects View -->
         <div id="projectsView">
             <div class="section">
                 <h2>Create New Project</h2>
@@ -317,10 +395,13 @@
                 <div id="tasksList" class="task-list"></div>
             </div>
         </div>
+        </div>
     </div>
 
     <script>
         let currentProjectId = null;
+        let isLoginMode = true;
+        let currentUser = null;
 
         // LocalStorage Data Management
         class DataStore {
@@ -328,6 +409,8 @@
                 this.PROJECTS_KEY = 'pmp_projects';
                 this.TASKS_KEY = 'pmp_tasks';
                 this.COUNTERS_KEY = 'pmp_counters';
+                this.USERS_KEY = 'pmp_users';
+                this.SESSION_KEY = 'pmp_session';
                 this.init();
             }
 
@@ -335,6 +418,65 @@
                 if (!localStorage.getItem(this.COUNTERS_KEY)) {
                     localStorage.setItem(this.COUNTERS_KEY, JSON.stringify({ projectId: 1, taskId: 1 }));
                 }
+            }
+
+            // Authentication Methods
+            getUsers() {
+                const data = localStorage.getItem(this.USERS_KEY);
+                return data ? JSON.parse(data) : [];
+            }
+
+            setUsers(users) {
+                localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
+            }
+
+            register(username, password) {
+                const users = this.getUsers();
+
+                // Check if user already exists
+                if (users.find(u => u.username === username)) {
+                    return { success: false, message: 'Username already exists' };
+                }
+
+                // Simple validation
+                if (username.length < 3) {
+                    return { success: false, message: 'Username must be at least 3 characters' };
+                }
+
+                if (password.length < 4) {
+                    return { success: false, message: 'Password must be at least 4 characters' };
+                }
+
+                // Add new user (storing password in plain text - NOT secure, only for demo)
+                users.push({ username, password });
+                this.setUsers(users);
+
+                return { success: true, message: 'Registration successful' };
+            }
+
+            login(username, password) {
+                const users = this.getUsers();
+                const user = users.find(u => u.username === username && u.password === password);
+
+                if (!user) {
+                    return { success: false, message: 'Invalid username or password' };
+                }
+
+                // Create session
+                localStorage.setItem(this.SESSION_KEY, username);
+                return { success: true, username };
+            }
+
+            logout() {
+                localStorage.removeItem(this.SESSION_KEY);
+            }
+
+            getCurrentUser() {
+                return localStorage.getItem(this.SESSION_KEY);
+            }
+
+            isLoggedIn() {
+                return this.getCurrentUser() !== null;
             }
 
             getCounters() {
@@ -472,10 +614,96 @@
 
         const dataStore = new DataStore();
 
-        // Load projects on page load
+        // Check authentication on page load
         document.addEventListener('DOMContentLoaded', () => {
-            loadProjects();
+            if (dataStore.isLoggedIn()) {
+                currentUser = dataStore.getCurrentUser();
+                showMainApp();
+            } else {
+                showAuthView();
+            }
         });
+
+        // Authentication form handler
+        document.getElementById('authForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = document.getElementById('authUsername').value;
+            const password = document.getElementById('authPassword').value;
+
+            let result;
+            if (isLoginMode) {
+                result = dataStore.login(username, password);
+            } else {
+                result = dataStore.register(username, password);
+            }
+
+            if (result.success) {
+                if (isLoginMode) {
+                    currentUser = result.username;
+                    showMainApp();
+                } else {
+                    // After successful registration, switch to login mode
+                    showError('Registration successful! Please login.');
+                    toggleAuthMode();
+                }
+            } else {
+                showError(result.message);
+            }
+        });
+
+        // Toggle between login and signup
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            const title = document.getElementById('authTitle');
+            const submitBtn = document.getElementById('authSubmitBtn');
+            const toggleText = document.getElementById('authToggleText');
+
+            if (isLoginMode) {
+                title.textContent = 'Login';
+                submitBtn.textContent = 'Login';
+                toggleText.textContent = "Don't have an account? Sign up";
+            } else {
+                title.textContent = 'Sign Up';
+                submitBtn.textContent = 'Sign Up';
+                toggleText.textContent = 'Already have an account? Login';
+            }
+
+            document.getElementById('authForm').reset();
+            hideError();
+        }
+
+        // Show/hide views
+        function showAuthView() {
+            document.getElementById('authView').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function showMainApp() {
+            document.getElementById('authView').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('currentUser').textContent = `Logged in as: ${currentUser}`;
+            loadProjects();
+        }
+
+        // Error handling
+        function showError(message) {
+            const errorDiv = document.getElementById('authError');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+        }
+
+        function hideError() {
+            const errorDiv = document.getElementById('authError');
+            errorDiv.classList.remove('show');
+        }
+
+        // Logout function
+        function logout() {
+            dataStore.logout();
+            currentUser = null;
+            showAuthView();
+            document.getElementById('authForm').reset();
+        }
 
         // Create project form
         document.getElementById('createProjectForm').addEventListener('submit', (e) => {
