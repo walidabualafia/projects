@@ -1,19 +1,12 @@
 {
   "name": "project-management-platform",
   "version": "1.0.0",
-  "description": "A simple project management platform to manage tasks and projects",
-  "main": "server.js",
+  "description": "A simple project management platform to manage tasks and projects - now GitHub Pages compatible!",
+  "main": "index.html",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "deploy": "git add . && git commit -m 'Deploy to GitHub Pages' && git push origin main"
   },
-  "keywords": ["project-management", "tasks", "nodejs"],
+  "keywords": ["project-management", "tasks", "github-pages"],
   "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "express": "^4.18.2"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  }
+  "license": "ISC"
 }
