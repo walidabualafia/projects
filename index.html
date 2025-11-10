@@ -505,12 +505,13 @@
                 localStorage.setItem(this.TASKS_KEY, JSON.stringify(tasks));
             }
 
-            createProject(name, description) {
+            createProject(name, description, userId) {
                 const projects = this.getProjects();
                 const counters = this.getCounters();
 
                 const newProject = {
                     id: counters.projectId++,
+                    userId: userId,
                     name,
                     description: description || '',
                     completed: false,
@@ -533,6 +534,13 @@
                 const project = projects.find(p => p.id === projectId);
 
                 if (project) {
+                    // Check ownership
+                    const currentUser = this.getCurrentUser();
+                    if (project.userId !== currentUser) {
+                        console.error('User does not have permission to update this project');
+                        return null;
+                    }
+
                     Object.assign(project, updates);
                     this.setProjects(projects);
                 }
@@ -541,9 +549,20 @@
             }
 
             deleteProject(projectId) {
-                let projects = this.getProjects();
-                projects = projects.filter(p => p.id !== projectId);
-                this.setProjects(projects);
+                const projects = this.getProjects();
+                const project = projects.find(p => p.id === projectId);
+
+                // Check ownership before deleting
+                if (project) {
+                    const currentUser = this.getCurrentUser();
+                    if (project.userId !== currentUser) {
+                        console.error('User does not have permission to delete this project');
+                        return false;
+                    }
+                }
+
+                const updatedProjects = projects.filter(p => p.id !== projectId);
+                this.setProjects(updatedProjects);
 
                 // Delete all tasks for this project
                 let tasks = this.getTasks();
@@ -710,8 +729,9 @@
             e.preventDefault();
             const name = document.getElementById('projectName').value;
             const description = document.getElementById('projectDescription').value;
+            const currentUser = dataStore.getCurrentUser();
 
-            dataStore.createProject(name, description);
+            dataStore.createProject(name, description, currentUser);
             document.getElementById('createProjectForm').reset();
             loadProjects();
         });
@@ -731,7 +751,9 @@
 
         // Load all projects
         function loadProjects() {
-            const projects = dataStore.getProjects();
+            const currentUser = dataStore.getCurrentUser();
+            const allProjects = dataStore.getProjects();
+            const projects = allProjects.filter(p => p.userId === currentUser);
             const projectsList = document.getElementById('projectsList');
 
             if (projects.length === 0) {
@@ -763,6 +785,13 @@
 
             const project = dataStore.getProject(projectId);
             if (!project) return;
+
+            // Check if current user owns this project
+            const currentUser = dataStore.getCurrentUser();
+            if (project.userId !== currentUser) {
+                alert('You do not have permission to view this project.');
+                return;
+            }
 
             const stats = dataStore.getProjectStats(projectId);
             const tasks = dataStore.getTasksForProject(projectId);
